@@ -14,6 +14,7 @@ static class ChartModule
 
         return chartOrError.AsT0;
     }
+
     public static async Task<OneOf<List<string>, ErrorInfo>> GetArtistsChartAsync(ushort capacity = 10)
     {
         try
@@ -28,11 +29,22 @@ static class ChartModule
             List<string> artists = new();
             foreach (var artist in artistsNodes)
                 artists.Add(artist.InnerText);
-            return artists;
+            return artists.Take(capacity).ToList();
         }
         catch (System.Exception ex)
         {
             return new ErrorInfo(ErrorCode.ParseError, $"Возникло исключение при получении чарта исполнителей", showErrorToUser: false, ex);
         }
+    }
+
+    public static OneOf<List<TrackInfo>, ErrorInfo> GetArtistTopTracks(string artist, ushort capacity = 10)
+    {
+        Edge edge = new();
+        OneOf<List<TrackInfo>, ErrorInfo> artistTracksOrError = edge.GetArtistTracks(artist, capacity);
+
+        if (artistTracksOrError.IsT1)
+            return artistTracksOrError.AsT1;
+
+        return artistTracksOrError.AsT0;
     }
 }

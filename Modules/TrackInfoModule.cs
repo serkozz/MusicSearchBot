@@ -152,4 +152,57 @@ public static class TrackInfoModule
             return new ErrorInfo(ErrorCode.ParseError, $"Возникло исключение при получении информации о треке", showErrorToUser: false, ex);
         }
     }
+
+    public static OneOf<List<TrackInfo>, ErrorInfo> ExtendedSearch(string query)
+    {
+        try
+        {
+            var extendedSearchInfoOrError = ParseSearchInfo(query);
+            if (extendedSearchInfoOrError.IsT1)
+                return extendedSearchInfoOrError.AsT1;
+            Edge edge = new();
+            var tracksOrError = edge.ExtendedSearch(extendedSearchInfoOrError.AsT0);
+            if (tracksOrError.IsT1)
+                return tracksOrError.AsT1;
+            return tracksOrError.AsT0;
+        }
+        catch (System.Exception ex)
+        {
+            Console.WriteLine($"{ex}");
+            return new ErrorInfo(ErrorCode.ParseError, "Невозможно распознать аргументы запроса", true);
+        }
+    }
+
+    private static OneOf<ExtendedSearchInfo, ErrorInfo> ParseSearchInfo(string query)
+    {
+        var args = query.Split(" ");
+        if (args.Length > 5)
+            return new ErrorInfo(ErrorCode.ParseError, "Число переданных аргументов для данной команды не должно превышать пяти!", true);
+        var genres = Enum.GetNames(typeof(Genre)).ToList();
+        var moods = Enum.GetNames(typeof(Mood)).ToList();
+        ExtendedSearchInfo searchInfo = new();
+        foreach (var arg in args)
+        {
+            if (genres.Contains(arg))
+            {
+                var genreStr = genres.Find(argVal => argVal == arg);
+                ArgumentNullException.ThrowIfNull(genreStr);
+                if (searchInfo.Genres.Count < 3)
+                    searchInfo.Genres.Add((Genre)Enum.Parse(typeof(Genre), genreStr));
+            }
+            if (moods.Contains(arg))
+            {
+                var moodStr = moods.Find(argVal => argVal == arg);
+                ArgumentNullException.ThrowIfNull(moodStr);
+                searchInfo.Mood = (Mood)Enum.Parse(typeof(Mood), moodStr);
+            }
+            if (arg.Contains("-"))
+            {
+                var bpmInfoString = arg.Split("-", 2);
+                BPMInfo BPMInfo = new(Int16.Parse(bpmInfoString[0]), Int16.Parse(bpmInfoString[1]));
+                searchInfo.BPMInfo = BPMInfo;
+            }
+        }
+        return searchInfo;
+    }
 }

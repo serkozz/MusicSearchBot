@@ -1,4 +1,6 @@
 
+using System.Collections.ObjectModel;
+
 public class Edge
 {
     private EdgeDriver Driver { get; set; }
@@ -143,7 +145,7 @@ public class Edge
         }
     }
 
-    public OneOf<List<TrackInfo>, ErrorInfo> GetTracksChart(ushort capacity = 100)
+    public OneOf<List<TrackInfo>, ErrorInfo> GetTracksChart(ushort capacity)
     {
         try
         {
@@ -158,7 +160,7 @@ public class Edge
         }
     }
 
-    public OneOf<List<TrackInfo>, ErrorInfo> GetNewelties(ushort capacity = 100)
+    public OneOf<List<TrackInfo>, ErrorInfo> GetNewelties(ushort capacity)
     {
         try
         {
@@ -171,5 +173,116 @@ public class Edge
             Console.WriteLine(ex.Message);
             return new ErrorInfo(ErrorCode.ParseError, $"Невозможно получить новинки", true);
         }
+    }
+
+    /// FIXME: Не всегда работает как надо (капча, будь она неладна)
+    public OneOf<List<TrackInfo>, ErrorInfo> GetArtistTracks(string artist, ushort capacity)
+    {
+        try
+        {
+            string baseUrl = "https://music.yandex.ru/";
+            string url = $"{baseUrl}search?text={artist}";
+            Driver.Navigate().GoToUrl(url);
+            string artistSpecificUrl = Driver.FindElement(By.XPath(".//*[@class='artist']//a")).GetAttribute("href");
+            Driver.Navigate().GoToUrl(artistSpecificUrl + "/tracks");
+            new WebDriverWait(Driver, TimeSpan.FromSeconds(10)).Until<bool>(driver => driver.FindElement(By.XPath(".//div[@class='d-generic-page-head__main-top']//h1']")).Displayed);
+            var artistName = this.Driver.FindElement(By.XPath(".//div[@class='d-generic-page-head__main-top']//h1")).Text;
+            var tracksNamesElements = this.Driver.FindElements(By.CssSelector(".d-track__name"));
+            string result = string.Empty;
+            List<TrackInfo> tracks = new();
+            foreach (var nameElement in tracksNamesElements)
+                tracks.Add(new TrackInfo(nameElement.GetAttribute("title"), artistName));
+            Driver.Quit();
+            return tracks;
+        }
+        catch (System.Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return new ErrorInfo(ErrorCode.ParseError, $"Невозможно получить треки указанного исполнителя", true);
+        }
+    }
+
+    public OneOf<List<TrackInfo>, ErrorInfo> ExtendedSearch(ExtendedSearchInfo extendedSearchInfo)
+    {
+        try
+        {
+            string baseUrl = "https://musicstax.com/ru/search/advanced";
+            Driver.Navigate().GoToUrl(baseUrl);
+            IWebElement? genreSelector;
+            IWebElement? moodSelector;
+            ReadOnlyCollection<IWebElement?> genreSelectorOptions;
+            var bpmInputs = Driver.FindElements(By.XPath(".//input[@class='advanced-search']"));
+            IWebElement? minBpmInput = bpmInputs[0];
+            IWebElement? maxBpmInput = bpmInputs[1];
+            int index;
+
+            foreach (var genre in extendedSearchInfo.Genres)
+            {
+                genreSelector = Driver.FindElement(By.CssSelector(".select2-search__field"));
+                genreSelector.Click();
+                genreSelectorOptions = Driver.FindElements(By.TagName("option"));
+                index = (int)genre + 1;
+                genreSelectorOptions[index]?.Click();
+            }
+
+            minBpmInput.SendKeys(extendedSearchInfo.BPMInfo.Min.ToString());
+            maxBpmInput.SendKeys(extendedSearchInfo.BPMInfo.Max.ToString());
+
+            moodSelector = Driver.FindElements(By.CssSelector(".select2-selection__rendered"))[1];
+            moodSelector.Click();
+            List<IWebElement?> moodSelectorOptions = Driver.FindElements(By.XPath(".//li"))
+                .Where((el, ind) => el.GetAttribute("class").Contains("select2-results__option--selectable"))
+                .ToList();
+
+            index = (int)extendedSearchInfo.Mood;
+            moodSelectorOptions[index]?.Click();
+
+            IWebElement? submitBtn = Driver.FindElements(By.XPath(".//button")).Last();
+            submitBtn.Click();
+
+            var tracks = ParseTracksInfos(Driver.FindElements(By.XPath(".//a[@class='artist-seed-track-right']")));
+
+            Driver.Quit();
+            return tracks;
+        }
+        catch (System.Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return new ErrorInfo(ErrorCode.ParseError, $"Невозможно получить треки", true);
+        }
+    }
+
+    private List<TrackInfo> ParseTracksInfos(ReadOnlyCollection<IWebElement> trackCards)
+    {
+        List<TrackInfo> tracks = new();
+        foreach (var card in trackCards)
+        {
+            var cardDetails = card.FindElements(By.TagName("div"));
+            string trackArtist = cardDetails[0].Text.Trim();
+            string trackName = cardDetails[1].FindElement(By.TagName("u")).Text.Trim();
+
+            var details = cardDetails[2].Text.Split("•");
+            var volumeAndPopularity = details[3].Split("\r\n\r\n", 2);
+
+            TrackDetails trackDetails = new TrackDetails(length: details[2].Trim(),
+                                                        tempo: Int32.Parse(details[0].Trim().Split(" ", 2)[0]),
+                                                        mood: details[1].Trim(),
+                                                        volume: volumeAndPopularity[0].Trim(),
+                                                        popularity: Int32.Parse(volumeAndPopularity[1].Trim().Split(" ", 2)[0].TrimEnd('%')),
+                                                        danceability: Int32.Parse(details[4].Trim().Split(" ", 2)[0].TrimEnd('%')),
+                                                        energy: Int32.Parse(details[5].Trim().Split(" ", 2)[0].TrimEnd('%')),
+                                                        positivity: Int32.Parse(details[7].Trim().Split(" ", 2)[0].TrimEnd('%')),
+                                                        speech: default,
+                                                        vitality: Int32.Parse(details[6].Split("\r\n", 2)[0].Trim().Split(" ", 2)[0].TrimEnd('%')),
+                                                        instrumentality: default);
+
+            TrackInfo trackInfo = new(trackName, trackArtist)
+            {
+                TrackDetails = trackDetails
+            };
+            tracks.Add(trackInfo);
+        }
+        Console.WriteLine($"Text");
+        return tracks;
     }
 }

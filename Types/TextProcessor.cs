@@ -33,7 +33,17 @@ static class TextProcessor
                 await client.SendTextMessageAsync(message.Chat.Id, BotReplyConstants.GREETINGS_MESSAGE);
                 return;
             case "/search":
-            // TODO: Расширенный поиск
+                // TODO: Расширенный поиск
+                var extendedSearchTracksOrError = TrackInfoModule.ExtendedSearch(string.Join(" ", splittedCommand[1..splittedCommand.Length]));
+                if (extendedSearchTracksOrError.IsT0)
+                {
+                    List<TrackInfo> extendedSearchTracks = extendedSearchTracksOrError.AsT0.Take(10).ToList();
+                    string resultString = extendedSearchTracks.ListToString(toShortString: false);
+                    await client.SendTextMessageAsync(message.Chat.Id, $"Найдено: {extendedSearchTracks.Count} треков\n\n{resultString}");
+                    return;
+                }
+                await client.SendTextMessageAsync(message.Chat.Id, extendedSearchTracksOrError.AsT1.ShowErrorToUser ? extendedSearchTracksOrError.AsT1.Message : ERROR_MESSAGE);
+                return;
             case "/info":
                 var trackInfoOrError = await TrackInfoModule.GetTrackInfoAsync(string.Join(" ", splittedCommand[1..splittedCommand.Length]));
                 if (trackInfoOrError.IsT0)
@@ -57,7 +67,7 @@ static class TextProcessor
                 if (tracksOrError.IsT0)
                 {
                     List<TrackInfo> searchResult = tracksOrError.AsT0;
-                    string resultString = searchResult.TrackListToString();
+                    string resultString = searchResult.ListToString();
                     await client.SendTextMessageAsync(message.Chat.Id, $"Совпадений: {searchResult.Count} треков\n\n{resultString}");
                     return;
                 }
@@ -84,21 +94,38 @@ static class TextProcessor
                     return;
                 }
                 List<TrackInfo> chartTracks = chartOrError.AsT0;
-                string result = chartTracks.TrackListToString();
+                string result = chartTracks.ListToString();
                 await client.SendTextMessageAsync(message.Chat.Id, $"Чарт получен: {chartTracks.Count} треков\n\n{result}");
                 return;
             case "/artistsChart":
-                // TODO: Чарт исполнителей
-                var artistsOrError = await ChartModule.GetArtistsChartAsync();
+                OneOf<List<string>, ErrorInfo> artistsOrError;
+                if (splittedCommand.Length == 2 && UInt16.TryParse(splittedCommand[1], out capacity))
+                    artistsOrError = await ChartModule.GetArtistsChartAsync(capacity > 50 ? (ushort)50 : capacity);
+                else
+                    artistsOrError = await ChartModule.GetArtistsChartAsync();
                 if (artistsOrError.IsT1)
                 {
                     await client.SendTextMessageAsync(message.Chat.Id, artistsOrError.AsT1.ShowErrorToUser ? artistsOrError.AsT1.Message : ERROR_MESSAGE);
                     return;
                 }
-                await client.SendTextMessageAsync(message.Chat.Id, "egegesg");
+                List<string> chartArtists = artistsOrError.AsT0;
+                result = chartArtists.ListToString();
+                await client.SendTextMessageAsync(message.Chat.Id, $"Топ исполнителей: {chartArtists.Count} исполнителей\n\n{result}");
                 return;
             case "/artist":
-                // TODO: Топ треки исполнителя  
+                OneOf<List<TrackInfo>, ErrorInfo> artistTracksOrError;
+                // if (UInt16.TryParse(splittedCommand[1], out capacity))
+                //     artistTracksOrError = ChartModule.GetArtistTopTracks(, capacity > 50 ? (ushort)50 : (ushort)50);
+                // else
+                artistTracksOrError = ChartModule.GetArtistTopTracks(string.Join(" ", splittedCommand[1..splittedCommand.Length]), 50);
+                if (artistTracksOrError.IsT1)
+                {
+                    await client.SendTextMessageAsync(message.Chat.Id, artistTracksOrError.AsT1.ShowErrorToUser ? artistTracksOrError.AsT1.Message : ERROR_MESSAGE);
+                    return;
+                }
+                List<TrackInfo> artistTracks = artistTracksOrError.AsT0;
+                result = artistTracks.ListToString();
+                await client.SendTextMessageAsync(message.Chat.Id, $"Треки исполнителя {artistTracks[0].TrackArtist}: {artistTracks.Count} треков\n\n{result}");
                 return;
             case "/new":
                 OneOf<List<TrackInfo>, ErrorInfo> neweltiesOrError;
@@ -112,7 +139,7 @@ static class TextProcessor
                     return;
                 }
                 List<TrackInfo> neweltiesTracks = neweltiesOrError.AsT0;
-                result = neweltiesTracks.TrackListToString();
+                result = neweltiesTracks.ListToString();
                 await client.SendTextMessageAsync(message.Chat.Id, $"Новинки получены: {neweltiesTracks.Count} треков\n\n{result}");
                 return;
             default:

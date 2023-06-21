@@ -7,12 +7,33 @@ public static class Utility
         return Uri.EscapeDataString(unpreparedUrl.Replace(' ', spaceReplace));
     }
 
-    public static string TrackListToString(this List<TrackInfo> tracks)
+    public static string ListToString<T>(this List<T> list, bool toShortString = true) where T : class
     {
-        string result = string.Empty;
-        for (int i = 0; i < tracks.Count; i++)
-            result += $"{i+1}) {tracks[i].ToShortString()}\n\n";
-        return result;
+        if (typeof(T) == typeof(string))
+        {
+            string result = string.Empty;
+            for (int i = 0; i < list.Count; i++)
+                result += $"{i + 1}) {list[i]}\n\n";
+            return result;
+        }
+        else if (typeof(T) == typeof(TrackInfo))
+        {
+            string result = string.Empty;
+            TrackInfo? trackInfo;
+            for (int i = 0; i < list.Count; i++)
+            {
+                trackInfo = list[i] as TrackInfo;
+                if (toShortString)
+                {
+                    result += $"{i + 1}) {trackInfo?.ToShortString()}\n\n";
+                    continue;
+                }
+                result += $"{i + 1}) {trackInfo?.ToString()}\n\n";
+            }
+            return result;
+        }
+        else
+            throw new NotSupportedException();
     }
 }
 
