@@ -1,6 +1,6 @@
 public static class BotConfigConstants
 {
-    public const string TOKEN = "6067023985:AAFQ3FZdOlLbxflzCFDGgrt8b3PUWyCP4As";
+    public const string TOKEN = "<HereMustBeToken>";
     public const string SEPARATOR = "@sep@";
     public const int MAX_RESULTS = 5;
     public const string SEARCH_CALLBACK_DATA = "search";
